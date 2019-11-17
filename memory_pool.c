@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
+#define MPOOL_DEFAUL_PAGE_SIZE 64
 
 extern int errno;
 
@@ -18,6 +19,7 @@ typedef struct mpool_t {
 typedef struct mpool_page_t {
     char *start_addr;
     unsigned int size;
+    int is_allocated : 1;
 } mpool_page_t;
 
 /*
@@ -29,6 +31,26 @@ typedef struct mpool_pages_t {
 } mpool_pages_t;
 
 /*
+ * Allocate memory for n pool pages 
+*/
+mpool_pages_t *create_mpool_n_pages(const unsigned int number_of_pages) {
+    mpool_pages_t *result_mpool_page_ptr = (mpool_pages_t*) malloc(number_of_pages * sizeof(mpool_pages_t));
+
+    if (result_mpool_page_ptr == NULL) {
+        return NULL;
+    }
+
+    mpool_pages_t *current_mpool_page_ptr = result_mpool_page_ptr;
+
+    for (int n = 1; n < number_of_pages; ++n) {
+        current_mpool_page_ptr->next_page = current_mpool_page_ptr + 1;
+        current_mpool_page_ptr += 1;
+    }
+
+    return result_mpool_page_ptr;
+}
+
+/*
  * Open/allocate new memory pool
 */
 mpool_t *create_mpool(const unsigned int pool_size) {
@@ -38,15 +60,31 @@ mpool_t *create_mpool(const unsigned int pool_size) {
         return NULL;
     }
 
+    mpool_pages_t *mpool_pages_ptr = create_mpool_n_pages(MPOOL_DEFAUL_PAGE_SIZE);
+    
+    if (mpool_pages_ptr == NULL) {
+        free(new_mpool_ptr);
+        return NULL;
+    }
+
     new_mpool_ptr->size = pool_size;
+    new_mpool_ptr->pages = mpool_pages_ptr;
 
     return new_mpool_ptr;
+}
+
+/*
+ * Free memory of all pool pages
+*/
+void free_mpool_pages(mpool_pages_t *mpool_pages_ptr) {
+    free(mpool_pages_ptr);
 }
 
 /*
  * Close/free memory pool
 */
 void close_mpool(mpool_t *mp_ptr) {
+    free_mpool_pages(mp_ptr->pages);
     free(mp_ptr);
 }
 
@@ -54,11 +92,6 @@ void close_mpool(mpool_t *mp_ptr) {
  * Wipe memory pool
 */
 mpool_t *clear_mpool(mpool_t *mp_ptr) {
-    if (mp_ptr->pages != NULL) {
-        errno = EACCES;
-        return NULL;
-    }
-
     mpool_t *new_mpool_t = (mpool_t*) realloc(mp_ptr, sizeof(mpool_t));
 
     if (new_mpool_t == NULL) {
@@ -66,7 +99,10 @@ mpool_t *clear_mpool(mpool_t *mp_ptr) {
         return NULL;
     }
 
+    free_mpool_pages(new_mpool_t->pages);
+
     new_mpool_t->size = 0;
+    new_mpool_t->pages = NULL;
 
     return new_mpool_t;
 }
@@ -74,7 +110,17 @@ mpool_t *clear_mpool(mpool_t *mp_ptr) {
 int main() {
     mpool_t *mpool_ptr = create_mpool(1024);
 
+    if (mpool_ptr == NULL) {
+        perror("create_mpool: ");
+        return 1;
+    }
+
     mpool_ptr = clear_mpool(mpool_ptr);
+
+    if (mpool_ptr == NULL) {
+        perror("clear_mpool: ");
+        return 1;
+    }
 
     close_mpool(mpool_ptr);
 
