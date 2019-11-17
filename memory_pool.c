@@ -1,3 +1,4 @@
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -33,7 +34,7 @@ typedef struct mpool_pages_t {
 /*
  * Allocate memory for n pool pages 
 */
-mpool_pages_t *create_mpool_n_pages(const unsigned int number_of_pages) {
+mpool_pages_t *create_mpool_n_pages(const unsigned int number_of_pages, char *start_address) {
     mpool_pages_t *result_mpool_page_ptr = (mpool_pages_t*) malloc(number_of_pages * sizeof(mpool_pages_t));
 
     if (result_mpool_page_ptr == NULL) {
@@ -42,8 +43,19 @@ mpool_pages_t *create_mpool_n_pages(const unsigned int number_of_pages) {
 
     mpool_pages_t *current_mpool_page_ptr = result_mpool_page_ptr;
 
+    // set mpool_pages pointers to the next page
     for (int n = 1; n < number_of_pages; ++n) {
         current_mpool_page_ptr->next_page = current_mpool_page_ptr + 1;
+        current_mpool_page_ptr += 1;
+    }
+
+    current_mpool_page_ptr = result_mpool_page_ptr;
+
+    // init mpool_pages
+    for (int n = 0; n < number_of_pages; ++n) {
+        current_mpool_page_ptr->page.is_allocated = 0;
+        current_mpool_page_ptr->page.size = MPOOL_DEFAUL_PAGE_SIZE;
+        current_mpool_page_ptr->page.start_addr = start_address + n * MPOOL_DEFAUL_PAGE_SIZE;
         current_mpool_page_ptr += 1;
     }
 
@@ -54,13 +66,16 @@ mpool_pages_t *create_mpool_n_pages(const unsigned int number_of_pages) {
  * Open/allocate new memory pool
 */
 mpool_t *create_mpool(const unsigned int pool_size) {
-    mpool_t *new_mpool_ptr = (mpool_t*) malloc(pool_size + sizeof(mpool_t));
+    const int mpool_page_size = MPOOL_DEFAUL_PAGE_SIZE;
+    const int number_of_mpool_pages = (int) ceil((double) pool_size / mpool_page_size);
+
+    mpool_t *new_mpool_ptr = (mpool_t*) malloc(sizeof(mpool_t) + number_of_mpool_pages * mpool_page_size);
 
     if (new_mpool_ptr == NULL) {
         return NULL;
     }
-
-    mpool_pages_t *mpool_pages_ptr = create_mpool_n_pages(MPOOL_DEFAUL_PAGE_SIZE);
+    
+    mpool_pages_t *mpool_pages_ptr = create_mpool_n_pages(number_of_mpool_pages, (char*) new_mpool_ptr + sizeof(mpool_t));
     
     if (mpool_pages_ptr == NULL) {
         free(new_mpool_ptr);
