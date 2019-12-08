@@ -6,19 +6,28 @@
 
 #define THREAD_IS_RUNNING_STATUS_VALUE 0
 #define THREAD_DESIRE_EXCLUSIVE_ACCESS 1
+#define MAX_INCREMENT_VALUE 50000
 
 typedef struct thread_flags_t_ {
     size_t size;
     volatile bool *array;
 } thread_flags_t;
 
-volatile thread_flags_t *thread_flags = NULL;
-volatile int thread_turn = -1;
+// Array of thread flags, which signifies thread desire to acquire resource
+thread_flags_t *thread_flags = NULL;
 
-int result_answer_to_increment = 0; // to demonstrate mutex proof-of-concept
+// Next thread in turn
+volatile size_t thread_turn = -1;
 
-int get_max_pid_value() {
-    int max_pid_value_result;
+// Counter to contoler id of spotted thread
+size_t next_spotted_thread_id = 0;
+
+// Counter to demonstrate mutex proof-of-concept
+int result_answer_to_increment = 0; 
+
+size_t get_max_pid_value() {
+
+    size_t max_pid_value_result;
     FILE *max_pid_file_ptr;
 
     if ((max_pid_file_ptr = fopen("/proc/sys/kernel/pid_max", "r")) == NULL) {
@@ -26,7 +35,7 @@ int get_max_pid_value() {
         exit(0);
     }
 
-    fscanf(max_pid_file_ptr, "%d", &max_pid_value_result);
+    fscanf(max_pid_file_ptr, "%zu", &max_pid_value_result);
 
     fclose(max_pid_file_ptr);
 
@@ -37,7 +46,8 @@ void lock_init() {
 
     if (thread_flags == NULL) {
 
-        int max_pid_value = get_max_pid_value();
+        // for simplicity take max pid as size of thread flag array
+        size_t max_pid_value = get_max_pid_value();
 
         thread_flags = (thread_flags_t*) malloc(sizeof(thread_flags_t));
 
@@ -63,8 +73,6 @@ void lock_init() {
     }
 
     thread_turn = THREAD_IS_RUNNING_STATUS_VALUE;
-
-    return;
 }
 
 void lock_destroy() {
@@ -77,13 +85,19 @@ void lock_destroy() {
     thread_flags = NULL;
 }
 
-void lock(int self) {
+void lock(size_t self) {
 
     thread_flags->array[self] = THREAD_DESIRE_EXCLUSIVE_ACCESS;
 
-    for (int thread_pid_to_check = 0; thread_pid_to_check < thread_flags->size; ++thread_pid_to_check) {
+    for (size_t thread_pid_to_check = 0; thread_pid_to_check < thread_flags->size; ++thread_pid_to_check) {
 
+        // do not check the self thread pid
         if (thread_pid_to_check == self) {
+            continue;
+        }
+
+        // do not check thread pid, that does not desire access
+        if (thread_flags->array[thread_pid_to_check] != THREAD_DESIRE_EXCLUSIVE_ACCESS) {
             continue;
         }
 
@@ -98,19 +112,19 @@ void lock(int self) {
     return;
 }
 
-void unlock(int self) {
+void unlock(size_t self) {
     thread_flags->array[self] = THREAD_IS_RUNNING_STATUS_VALUE;
 }
 
 void *perform_incrementing(void *args) {
 
-    int self_thread_pid = (int*) args;
+    size_t self_thread_pid = (size_t*) args;
 
-    printf("Thread #%d started\n", self_thread_pid);
+    printf("Thread #%ud started\n", self_thread_pid);
 
     lock(self_thread_pid);
 
-    for (int i = 0; i < 10000; ++i) {
+    for (int i = 0; i < MAX_INCREMENT_VALUE; ++i) {
         ++result_answer_to_increment;
     }
 
@@ -119,21 +133,35 @@ void *perform_incrementing(void *args) {
     printf("Thread #%d finished\n", self_thread_pid);
 }
 
-int main() {
+pthread_t *start_increment_thread() {
 
-    pthread_t p1, p2;
+    pthread_t *result_pid = (pthread_t*) malloc(sizeof(pthread_t));
+
+    pthread_create(result_pid, NULL, perform_incrementing, (void*)next_spotted_thread_id++);
+
+    return result_pid;
+}
+
+int main() {
 
     lock_init();
 
-    pthread_create(&p1, NULL, perform_incrementing, (void*)0);
-    pthread_create(&p2, NULL, perform_incrementing, (void*)1);
+    pthread_t *p1 = start_increment_thread();
+    pthread_t *p2 = start_increment_thread();
 
-    pthread_join(p1, NULL);
-    pthread_join(p2, NULL);
+    pthread_join(*p1, NULL);
+    pthread_join(*p2, NULL);
 
     lock_destroy();
 
-    printf("Result answer = %d", result_answer_to_increment);
+    free(p1);
+    free(p2);
+
+    int expected_result_answer = MAX_INCREMENT_VALUE * 2;
+
+    printf("Result = %d. Expected = %d\n", result_answer_to_increment, expected_result_answer);
+
+    printf(expected_result_answer == result_answer_to_increment ? "Success\n" : "Failure\n");
 
     return 0;    
 }
