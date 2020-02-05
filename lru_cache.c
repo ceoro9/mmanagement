@@ -1,16 +1,87 @@
 #include <stdio.h>
 #include <stdlib.h>
+#define LAMBDA(c_) ({ c_ _;})
+#define DO_NOTHING_FUNC LAMBDA(void _(void*_) {})
 
+
+/**
+ * List item data structure
+ *
+ * @data_ptr pointer to actual data
+ * @free_func_ptr pointer to function to free data memory
+ */
+typedef struct list_item_data_t_ {
+  void *data_ptr;
+  void (*free_func_ptr)(void*);
+} list_item_data_t;
+
+
+/**
+ * List item structure
+ *
+ * @data item data
+ * @next pointer to next list's item
+ */
 typedef struct list_item_t_ {
-  void* data;
+  list_item_data_t *data;
   struct list_item_t_ *next;
 } list_item_t;
 
+
+/**
+ * List structure
+ *
+ * @head list's head(dummy list item)
+ * @tail list's tail(dummy list item)
+ */
 typedef struct list_t_ {
   list_item_t *head;
   list_item_t *tail;
 } list_t;
 
+
+/**
+ * Initializes list's item data
+ *
+ * @returns pointer to the created item data or NULL if error
+ */
+list_item_data_t *init_list_item_data(void *data, void(*free_func)(void*)) {
+
+  list_item_data_t *result = (list_item_data_t*) malloc(sizeof(list_item_data_t));
+  if (!result) {
+    return NULL;
+  }
+
+  result->data_ptr = data;
+  result->free_func_ptr = free_func;
+
+  return result;
+}
+
+
+/**
+ * Frees item's data memory by calling free_func_ptr
+ * callback and also frees item's memory itself
+ */
+void free_list_item_data(list_item_data_t *lid) {
+
+  if (!lid || !lid->free_func_ptr) {
+    return;
+  }
+
+  // call provided callback to free data memory
+  (*(lid->free_func_ptr))(lid->data_ptr);
+
+  // free item's memory itsels
+  free(lid);
+}
+
+
+/**
+ * Initializes empty list
+ *
+ * @returns pointer to the created list or NULL if error
+ */
 list_t* init_list() {
 
   // init dummy head
@@ -45,21 +116,29 @@ list_t* init_list() {
   return result_list;
 }
 
+
 list_item_t *get_list_head(list_t *list) {
   return list->head;
 }
+
 
 list_item_t *get_list_tail(list_t *list) {
   return list->tail;
 }
 
-list_item_t *add_item_to_list(list_t *list, void *data) {
+
+/**
+ * Adds item's data to the head of list
+ *
+ * @returns pointer to the created list's item
+*/
+list_item_t *add_item_to_list(list_t *list, list_item_data_t *item_data) {
 
   list_item_t *new_list_item = malloc(sizeof(list_item_t));
   if (!new_list_item) {
     return NULL;
   }
-  new_list_item->data = data;
+  new_list_item->data = item_data;
 
   list_item_t *current_head_next_item = list->head->next;
   list->head->next = new_list_item;
@@ -68,12 +147,15 @@ list_item_t *add_item_to_list(list_t *list, void *data) {
   return new_list_item;
 }
 
+
 int is_list_empty(list_t *list) {
   return list->head->next == list->tail;
 }
 
+
 /**
  * Cleans list
+ *
  * @returns number of deleted list items
  */
 int clean_list(list_t *list) {
@@ -83,8 +165,13 @@ int clean_list(list_t *list) {
   list_item_t *end_item = list->tail;
 
   while (current_item != end_item) {
+
     list_item_t *next_item = current_item->next;
+
+    // free holding data and list item itself
+    free_list_item_data(current_item->data);
     free(current_item);
+
     current_item = next_item;
     ++deleted_items_counter;
   }
@@ -94,6 +181,10 @@ int clean_list(list_t *list) {
   return deleted_items_counter;
 }
 
+
+/**
+ * Cleans list and frees the list itself 
+*/
 void close_list(list_t *list) {
 
   if (!is_list_empty(list)) {
@@ -105,23 +196,39 @@ void close_list(list_t *list) {
   free(list);
 }
 
+
 int main() {
 
   list_t *my_list = init_list();
 
-  list_item_t *item_1 = add_item_to_list(my_list, (void*) 1);
-  list_item_t *item_2 = add_item_to_list(my_list, (void*) 2);
-  list_item_t *item_3 = add_item_to_list(my_list, (void*) 3);
+  // init data in text memory of program, so this memory
+  // cann't be freed - we do nothing in clean up callback
+  list_item_data_t *lid_1, *lid_2, *lid_3;
+  lid_1 = init_list_item_data((void*) 1, DO_NOTHING_FUNC);
+  lid_2 = init_list_item_data((void*) 2, DO_NOTHING_FUNC);
+  lid_3 = init_list_item_data((void*) 3, DO_NOTHING_FUNC);
 
-  printf("%d\n", item_1->data);
-  printf("%d\n", item_2->data);
-  printf("%d\n", item_3->data);
+  // init data on heap, so in clean up callback
+  // we just pass pointer to free function from stdlib
+  int *hoh = (int*) malloc(sizeof(int));
+  *hoh = 4;
+  list_item_data_t *lid_4 = init_list_item_data((void*) hoh, &free);
 
-  printf(is_list_empty(my_list) ? "List is empty\n" : "List is NOT empty\n");
+  list_item_t *item_1 = add_item_to_list(my_list, lid_1);
+  list_item_t *item_2 = add_item_to_list(my_list, lid_2);
+  list_item_t *item_3 = add_item_to_list(my_list, lid_3);
+  list_item_t *item_4 = add_item_to_list(my_list, lid_4);
+
+  printf("%d\n", item_1->data->data_ptr);
+  printf("%d\n", item_2->data->data_ptr);
+  printf("%d\n", item_3->data->data_ptr);
+  printf("%d\n", item_4->data->data_ptr);
+
+  printf(is_list_empty(my_list) ? "list is empty\n" : "list is not empty\n");
 
   clean_list(my_list);
 
-  printf(is_list_empty(my_list) ? "List is empty\n" : "List is NOT empty\n");
+  printf(is_list_empty(my_list) ? "list is empty\n" : "list is not empty\n");
 
   close_list(my_list);
 
