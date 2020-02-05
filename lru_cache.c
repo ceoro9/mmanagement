@@ -196,6 +196,29 @@ void close_list(list_t *list) {
   free(list);
 }
 
+list_item_t *reverse_list_inner(list_item_t *tail, list_item_t *current) {
+
+  if (current == tail) {
+    return tail;
+  }
+
+  list_item_t *prev_to = reverse_list_inner(tail, current->next);
+  prev_to->next = current;
+
+  return current;
+}
+
+void reverse_list(list_t *list) {
+
+  list_item_t *last_item = reverse_list_inner(list->tail, list->head->next);
+  last_item->next = list->head;
+
+  // swap(list->head, list->tail)
+  list_item_t *tmp = list->head;
+  list->head = list->tail;
+  list->tail = tmp;
+}
+
 
 int main() {
 
@@ -214,15 +237,27 @@ int main() {
   *hoh = 4;
   list_item_data_t *lid_4 = init_list_item_data((void*) hoh, &free);
 
+  free_list_item_data(lid_4);
+
   list_item_t *item_1 = add_item_to_list(my_list, lid_1);
   list_item_t *item_2 = add_item_to_list(my_list, lid_2);
   list_item_t *item_3 = add_item_to_list(my_list, lid_3);
-  list_item_t *item_4 = add_item_to_list(my_list, lid_4);
 
-  printf("%d\n", item_1->data->data_ptr);
-  printf("%d\n", item_2->data->data_ptr);
-  printf("%d\n", item_3->data->data_ptr);
-  printf("%d\n", item_4->data->data_ptr);
+  printf("First element: %d\n", my_list->head->next->data->data_ptr);
+  printf("Second element: %d\n", my_list->head->next->next->data->data_ptr);
+  printf("Third element: %d\n", my_list->head->next->next->next->data->data_ptr);
+
+  reverse_list(my_list);
+
+  printf("\n===================\n\n");
+
+  printf("First element: %d\n", my_list->head->next->data->data_ptr);
+  printf("Second element: %d\n", my_list->head->next->next->data->data_ptr);
+  printf("Third element: %d\n\n", my_list->head->next->next->next->data->data_ptr);
+
+  //
+  //
+  //
 
   printf(is_list_empty(my_list) ? "list is empty\n" : "list is not empty\n");
 
