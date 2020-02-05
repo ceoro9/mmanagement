@@ -5,10 +5,10 @@
 
 
 /**
- * List item data structure
+ * @struct List's item data
  *
- * @data_ptr pointer to actual data
- * @free_func_ptr pointer to function to free data memory
+ * @prop {data_ptr} pointer to actual data
+ * @prop {free_func_ptr} pointer to function to free holded memory
  */
 typedef struct list_item_data_t_ {
   void *data_ptr;
@@ -17,10 +17,10 @@ typedef struct list_item_data_t_ {
 
 
 /**
- * List item structure
+ * @struct List's item
  *
- * @data item data
- * @next pointer to next list's item
+ * @prop {data} item data
+ * @prop {next} pointer to next list's item
  */
 typedef struct list_item_t_ {
   list_item_data_t *data;
@@ -29,10 +29,10 @@ typedef struct list_item_t_ {
 
 
 /**
- * List structure
+ * @struct Linked list
  *
- * @head list's head(dummy list item)
- * @tail list's tail(dummy list item)
+ * @prop {head} list's head(dummy list item)
+ * @prop {tail} list's tail(dummy list item)
  */
 typedef struct list_t_ {
   list_item_t *head;
@@ -41,8 +41,7 @@ typedef struct list_t_ {
 
 
 /**
- * Initializes list's item data
- *
+ * @function Initializes list's item data
  * @returns pointer to the created item data or NULL if error
  */
 list_item_data_t *init_list_item_data(void *data, void(*free_func)(void*)) {
@@ -60,8 +59,9 @@ list_item_data_t *init_list_item_data(void *data, void(*free_func)(void*)) {
 
 
 /**
- * Frees item's data memory by calling free_func_ptr
- * callback and also frees item's memory itself
+ * @function List's item data destructor
+ * @brief Frees item's data memory by calling free_func_ptr
+ *        callback and also frees item's memory itself
  */
 void free_list_item_data(list_item_data_t *lid) {
 
@@ -78,8 +78,7 @@ void free_list_item_data(list_item_data_t *lid) {
 
 
 /**
- * Initializes empty list
- *
+ * @function Initializes empty list
  * @returns pointer to the created list or NULL if error
  */
 list_t* init_list() {
@@ -128,10 +127,9 @@ list_item_t *get_list_tail(list_t *list) {
 
 
 /**
- * Adds item's data to the head of list
- *
+ * @function Adds item's data to the head of list
  * @returns pointer to the created list's item
-*/
+ */
 list_item_t *add_item_to_list(list_t *list, list_item_data_t *item_data) {
 
   list_item_t *new_list_item = malloc(sizeof(list_item_t));
@@ -154,8 +152,7 @@ int is_list_empty(list_t *list) {
 
 
 /**
- * Cleans list
- *
+ * @function Cleans list
  * @returns number of deleted list items
  */
 int clean_list(list_t *list) {
@@ -183,8 +180,8 @@ int clean_list(list_t *list) {
 
 
 /**
- * Cleans list and frees the list itself 
-*/
+ * @function Cleans list's items and its memory itself
+ */
 void close_list(list_t *list) {
 
   if (!is_list_empty(list)) {
@@ -208,6 +205,9 @@ list_item_t *reverse_list_inner(list_item_t *tail, list_item_t *current) {
   return current;
 }
 
+/**
+ * @function Reverses list
+ */
 void reverse_list(list_t *list) {
 
   list_item_t *last_item = reverse_list_inner(list->tail, list->head->next);
@@ -269,3 +269,4 @@ int main() {
 
   return 0;
 }
+
