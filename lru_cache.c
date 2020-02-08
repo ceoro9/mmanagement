@@ -116,15 +116,14 @@ list_t* init_list() {
 }
 
 
-list_item_t *get_list_head(list_t *list) {
+static inline list_item_t *get_list_head(list_t *list) {
   return list->head;
 }
 
 
-list_item_t *get_list_tail(list_t *list) {
+static inline list_item_t *get_list_tail(list_t *list) {
   return list->tail;
 }
-
 
 /**
  * @function Adds item's data to the head of list
@@ -143,6 +142,35 @@ list_item_t *add_item_to_list(list_t *list, list_item_data_t *item_data) {
   new_list_item->next = current_head_next_item;
 
   return new_list_item;
+}
+
+
+/**
+ * @function Removes item from list
+ * @returns 0 on success, -1 if item was not found
+ */
+int remove_item_from_list(list_t *list, list_item_t *searched_item) {
+
+  list_item_t *prev_item = list->head;
+  list_item_t *current_item = prev_item->next;
+
+  while (current_item != list->tail &&
+         current_item != searched_item) {
+    prev_item = current_item;
+    current_item = current_item->next;
+  }
+
+  // Not found
+  if (current_item == list->tail) {
+    return -1;
+  }
+
+  prev_item->next = current_item->next;
+
+  free_list_item_data(current_item->data);
+  free(current_item);
+
+  return 0;
 }
 
 
@@ -243,17 +271,17 @@ int main() {
   list_item_t *item_2 = add_item_to_list(my_list, lid_2);
   list_item_t *item_3 = add_item_to_list(my_list, lid_3);
 
-  printf("First element: %d\n", my_list->head->next->data->data_ptr);
-  printf("Second element: %d\n", my_list->head->next->next->data->data_ptr);
-  printf("Third element: %d\n", my_list->head->next->next->next->data->data_ptr);
+  printf("first element: %d\n", my_list->head->next->data->data_ptr);
+  printf("second element: %d\n", my_list->head->next->next->data->data_ptr);
+  printf("third element: %d\n", my_list->head->next->next->next->data->data_ptr);
 
   reverse_list(my_list);
 
   printf("\n===================\n\n");
 
-  printf("First element: %d\n", my_list->head->next->data->data_ptr);
-  printf("Second element: %d\n", my_list->head->next->next->data->data_ptr);
-  printf("Third element: %d\n\n", my_list->head->next->next->next->data->data_ptr);
+  printf("first element: %d\n", my_list->head->next->data->data_ptr);
+  printf("second element: %d\n", my_list->head->next->next->data->data_ptr);
+  printf("third element: %d\n\n", my_list->head->next->next->next->data->data_ptr);
 
   //
   //
@@ -261,7 +289,9 @@ int main() {
 
   printf(is_list_empty(my_list) ? "list is empty\n" : "list is not empty\n");
 
-  clean_list(my_list);
+  remove_item_from_list(my_list, item_1);
+  remove_item_from_list(my_list, item_2);
+  remove_item_from_list(my_list, item_3);
 
   printf(is_list_empty(my_list) ? "list is empty\n" : "list is not empty\n");
 
