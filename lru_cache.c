@@ -65,12 +65,14 @@ list_item_data_t *init_list_item_data(void *data, void(*free_func)(void*)) {
  */
 void free_list_item_data(list_item_data_t *lid) {
 
-  if (!lid || !lid->free_func_ptr) {
+  if (!lid) {
     return;
   }
 
   // call provided callback to free data memory
-  (*(lid->free_func_ptr))(lid->data_ptr);
+  if (lid->free_func_ptr) {
+    (*(lid->free_func_ptr))(lid->data_ptr);
+  }
 
   // free item's memory itsels
   free(lid);
@@ -78,41 +80,64 @@ void free_list_item_data(list_item_data_t *lid) {
 
 
 /**
+ * @function Initializes list's item
+ * @returns pointer to the newly created list's item
+ */
+list_item_t *init_list_item(list_item_data_t *data, list_item_t *next_item) {
+
+  list_item_t *new_item = (list_item_t*) malloc(sizeof(list_item_t));
+
+  new_item->data = data;
+  new_item->next = next_item;
+
+  return new_item;
+}
+
+
+/**
+ * @function Lists' item destructor
+ * @brief Calls item's data destructor and free item's memory itself
+ */
+void free_list_item(list_item_t *item) {
+
+  if (!item) {
+    return;
+  }
+
+  free_list_item_data(item->data);
+  free(item);
+}
+
+/**
  * @function Initializes empty list
  * @returns pointer to the created list or NULL if error
  */
 list_t* init_list() {
 
-  // init dummy head
-  list_item_t* head = (list_item_t*) malloc(sizeof(list_item_t));
-  if (!head) {
-    return NULL;
-  }
-
   // init dummy tail
-  list_item_t* tail = (list_item_t*) malloc(sizeof(list_item_t));
+  list_item_t* tail = init_list_item(NULL, NULL);
   if (!tail) {
-    free(head);
     return NULL;
   }
 
-  head->data = NULL;
-  tail->data = NULL;
-
-  head->next = tail;
-  tail->next = NULL;
-
-  list_t *result_list = malloc(sizeof(list_t));
-  if (!result_list) {
-    free(head);
-    free(tail);
+  // init dummy head
+  list_item_t* head = init_list_item(NULL, tail);
+  if (!head) {
+    free_list_item(tail);
     return NULL;
   }
 
-  result_list->head = head;
-  result_list->tail = tail;
+  list_t *new_list = (list_t*) malloc(sizeof(list_t));
+  if (!new_list) {
+    free_list_item(tail);
+    free_list_item(head);
+    return NULL;
+  }
 
-  return result_list;
+  new_list->head = head;
+  new_list->tail = tail;
+
+  return new_list;
 }
 
 
@@ -125,18 +150,26 @@ static inline list_item_t *get_list_tail(list_t *list) {
   return list->tail;
 }
 
+
+static inline int is_list_empty(list_t *list) {
+  if (!list->head || !list->tail) return -1;
+  return list->head->next == list->tail;
+}
+
+
 /**
  * @function Adds item's data to the head of list
  * @returns pointer to the created list's item
  */
 list_item_t *add_item_to_list(list_t *list, list_item_data_t *item_data) {
 
-  list_item_t *new_list_item = malloc(sizeof(list_item_t));
+  list_item_t *new_list_item = init_list_item(item_data, NULL);
   if (!new_list_item) {
     return NULL;
   }
-  new_list_item->data = item_data;
 
+  // Make head point to the new item
+  // And new item to the head pointed to
   list_item_t *current_head_next_item = list->head->next;
   list->head->next = new_list_item;
   new_list_item->next = current_head_next_item;
@@ -151,31 +184,24 @@ list_item_t *add_item_to_list(list_t *list, list_item_data_t *item_data) {
  */
 int remove_item_from_list(list_t *list, list_item_t *searched_item) {
 
-  list_item_t *prev_item = list->head;
+  list_item_t *prev_item = get_list_head(list);
   list_item_t *current_item = prev_item->next;
 
-  while (current_item != list->tail &&
+  while (current_item != get_list_tail(list) &&
          current_item != searched_item) {
     prev_item = current_item;
     current_item = current_item->next;
   }
 
-  // Not found
-  if (current_item == list->tail) {
+  // If current item is tail - not found
+  if (current_item == get_list_tail(list)) {
     return -1;
   }
 
   prev_item->next = current_item->next;
-
-  free_list_item_data(current_item->data);
-  free(current_item);
+  free_list_item(current_item);
 
   return 0;
-}
-
-
-int is_list_empty(list_t *list) {
-  return list->head->next == list->tail;
 }
 
 
@@ -186,22 +212,19 @@ int is_list_empty(list_t *list) {
 int clean_list(list_t *list) {
 
   int deleted_items_counter = 0;
-  list_item_t *current_item = list->head->next;
-  list_item_t *end_item = list->tail;
+  list_item_t *current_item = get_list_head(list)->next;
+  list_item_t *end_item = get_list_tail(list);
 
   while (current_item != end_item) {
 
     list_item_t *next_item = current_item->next;
-
-    // free holding data and list item itself
-    free_list_item_data(current_item->data);
-    free(current_item);
+    free_list_item(current_item);
 
     current_item = next_item;
     ++deleted_items_counter;
   }
 
-  list->head->next = current_item;
+  get_list_head(list)->next = current_item;
 
   return deleted_items_counter;
 }
@@ -212,12 +235,11 @@ int clean_list(list_t *list) {
  */
 void close_list(list_t *list) {
 
-  if (!is_list_empty(list)) {
-    clean_list(list);
-  }
+  clean_list(list);
 
-  free(list->head);
-  free(list->tail);
+  free_list_item(list->head);
+  free_list_item(list->tail);
+
   free(list);
 }
 
@@ -232,6 +254,7 @@ list_item_t *reverse_list_inner(list_item_t *tail, list_item_t *current) {
 
   return current;
 }
+
 
 /**
  * @function Reverses list
