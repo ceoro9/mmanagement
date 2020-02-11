@@ -2,27 +2,27 @@
 #include <stdlib.h>
 
 
-typedef void (*destructor_t)(void*);
+typedef void (*RC_destructor_t)(void*);
 
 
 typedef struct  {
   void *data;
-  destructor_t dealloc;
-} ref_counter_payload_t;
+  RC_destructor_t dealloc;
+} RC_payload_t;
 
 
 typedef struct {
   uint ref_count;
-  ref_counter_payload_t payload;
-} ref_counter_meta_t;
+  RC_payload_t payload;
+} RC_object_t;
 
 
 /**
- * @function ref_counter_payload_t constructor
+ * @function RC_payload_t constructor
  */
-ref_counter_payload_t *init_ref_counter_payload(void *data, destructor_t dealloc) {
+RC_payload_t *init_RC_payload(void *data, RC_destructor_t dealloc) {
 
-  ref_counter_payload_t *result = (ref_counter_payload_t*) malloc(sizeof(ref_counter_payload_t));
+  RC_payload_t *result = (RC_payload_t*) malloc(sizeof(RC_payload_t));
 
   if (!result) {
     return NULL;
@@ -36,11 +36,11 @@ ref_counter_payload_t *init_ref_counter_payload(void *data, destructor_t dealloc
 
 
 /**
- * @function ref_counter_meta_t constructor
+ * @function RC_object_t constructor
  */
-ref_counter_meta_t *init_ref_counter_meta(ref_counter_payload_t *payload) {
+RC_object_t *init_RC_object(RC_payload_t *payload) {
 
-  ref_counter_meta_t *result = (ref_counter_meta_t*) malloc(sizeof(ref_counter_meta_t));
+  RC_object_t *result = (RC_object_t*) malloc(sizeof(RC_object_t));
 
   if (!result) {
     return NULL;
@@ -56,46 +56,46 @@ ref_counter_meta_t *init_ref_counter_meta(ref_counter_payload_t *payload) {
 /**
  * Deallocs holded memory
  */
-void RC_dealloc(ref_counter_meta_t *op) {
-  destructor_t dealloc = op->payload.dealloc;
-  (*dealloc)(op->payload.data);
+void RC_dealloc(RC_object_t *obj) {
+  RC_destructor_t dealloc = obj->payload.dealloc;
+  (*dealloc)(obj->payload.data);
 }
 
 
 /**
- * @function increases number of references to data without NULL-check
+ * @function increases number of references without NULL-check
  */
-static inline void RC_incref(ref_counter_meta_t *op) {
-  op->ref_count++;
+static inline void RC_incref(RC_object_t *obj) {
+  obj->ref_count++;
 }
 
 
 /**
- * @function increases number of references to data WITH NULL-check
+ * @function increases number of references WITH NULL-check
  */
-static inline void RC_xincref(ref_counter_meta_t *op) {
-  if (op != NULL) {
-    RC_incref(op);
+static inline void RC_xincref(RC_object_t *obj) {
+  if (obj != NULL) {
+    RC_incref(obj);
   }
 }
 
 
 /**
- * @function decreases number of references to data without NULL-check
+ * @function decreases number of references without NULL-check
  */
-static inline void RC_decref(ref_counter_meta_t *op) {
-  if (--op->ref_count == 0) {
-    RC_dealloc(op);
+static inline void RC_decref(RC_object_t *obj) {
+  if (--obj->ref_count == 0) {
+    RC_dealloc(obj);
   }
 }
 
 
 /**
- * @function decreases number of references to data WITH NULL-check
+ * @function decreases number of references WITH NULL-check
  */
-static inline void Rc_xdecref(ref_counter_meta_t *op) {
-  if (op != NULL) {
-    RC_decref(op);
+static inline void RC_xdecref(RC_object_t *obj) {
+  if (obj != NULL) {
+    RC_decref(obj);
   }
 }
 
