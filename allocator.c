@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <string.h>
+
 
 /**
  * @struct meta info about allocated block
@@ -40,15 +40,22 @@ static inline int get_metadata_size() {
 
 
 /**
- * @function inits allocator
+ * @function inits allocator (optional to call)
  */
-void RC_init() {
+int RC_init() {
 
   if (!heap_start) {
+
     int alloc_size = FIRST_ALLOCATION_SIZE + get_metadata_size();
 
     heap_start = sbrk(alloc_size);
-    proc_break = ((char*) heap_start) + alloc_size;
+
+    // unable to allocated memory
+    if (*((int*) heap_start) == -1) {
+      return -1;
+    }
+
+    proc_break = sbrk(0);
 
     RC_block_t *new_block = (RC_block_t*) heap_start;
 
@@ -56,7 +63,38 @@ void RC_init() {
     new_block->info.is_free = 1;
   }
 
-  return;
+  return 0;
+}
+
+
+/**
+ * @function calls sbrk to allocate new virtual memory
+ */
+void *allocate_new_memory(size_t requested_size) {
+
+  int metadata_size = get_metadata_size();
+
+  // no more memory -> allocate new block
+  int alloc_size = requested_size + metadata_size;
+  void *new_proc_break = sbrk(alloc_size); // new_proc_break == proc_break
+
+  // unsufficent request to obtain more memory
+  if (*((int*) new_proc_break) == -1) {
+    return NULL;
+  }
+
+  // if RC_init was no called
+  if (!heap_start) {
+    heap_start = new_proc_break;
+  }
+
+  RC_block_t *new_block = (RC_block_t*) new_proc_break;
+  proc_break = (void*) (((char*) new_proc_break) + alloc_size);
+
+  new_block->info.is_free = 0;
+  new_block->info.size = requested_size;
+
+  return new_block->data;
 }
 
 
@@ -65,10 +103,15 @@ void RC_init() {
  */
 void *RC_malloc(size_t requested_size) {
 
-  if (!heap_start || !requested_size) {
+  if (!requested_size) {
     return NULL;
   }
 
+  if (!heap_start) {
+    return allocate_new_memory(requested_size);
+  }
+
+  int metadata_size = get_metadata_size();
   RC_block_t *current_block = (RC_block_t*) heap_start;
 
   while (current_block != proc_break) {
@@ -78,18 +121,13 @@ void *RC_malloc(size_t requested_size) {
         current_block->info.size >= requested_size) {
 
       int size_diff = current_block->info.size - requested_size;
-      int metadata_size = get_metadata_size();
 
       current_block->info.is_free = 0;
-
-      printf("size_diff = %d, proc_break = %p ", size_diff, proc_break);
 
       // split one block on two
       if (size_diff >= min_block_size + metadata_size) {
 
         RC_block_t *new_block = (RC_block_t*) (current_block->data + requested_size);
-
-        printf("current_block = %p, new_block = %p", current_block, new_block);
 
         new_block->info.is_free = 1;
         new_block->info.size = size_diff - metadata_size;
@@ -103,20 +141,8 @@ void *RC_malloc(size_t requested_size) {
     current_block = (RC_block_t*) (current_block->data + current_block->info.size);
   }
 
-  // no more memory -> allocate new block
-  RC_block_t *new_block = (RC_block_t*) sbrk(requested_size);
-
-  // unsufficent request to obtain more memory
-  if (!new_block) {
-    return NULL;
-  }
-
-  proc_break = ((char*) new_block) + requested_size;
-
-  new_block->info.is_free = 0;
-  new_block->info.size = requested_size;
-
-  return new_block->data;
+  // else if block with sufficient size was not found
+  return allocate_new_memory(requested_size);
 }
 
 
@@ -187,39 +213,13 @@ void print_buffer(void *input_buf, int size) {
 
 int main() {
 
-  RC_init();
-  void *data = RC_malloc(10);
+  void *data_1 = RC_malloc(10);
+  void *data_2 = RC_malloc(100);
+  void *data_3 = RC_malloc(500);
 
   printf("\n\n");
   print_allocated_blocks();
-
-  RC_free(data);
-  printf("\n\n");
-  print_allocated_blocks();
-
-  /* int buffer_size = 10; */
-  /* char *buffer = (char*) RC_malloc(buffer_size); */
-  /* memset(buffer, 0x0, buffer_size); */
-
-  /* // print_buffer(buffer, buffer_size); */
-
-  /* int new_buffer_size = 30; */
-  /* char *new_buffer = (char*) RC_malloc(new_buffer_size); */
-
-  /* memset(new_buffer, 0xFF, new_buffer_size); */
-
-  /* print_buffer(new_buffer, new_buffer_size); */
-
-  /* printf("\n%p\n", proc_break); */
-
-  /* print_allocated_blocks(); */
-
-  /* RC_free(new_buffer); */
-  /* RC_free(buffer); */
-
-  /* RC_block_t *first_block = (RC_block_t*) ((char*) buffer - get_metadata_size()); */
-
-  /* printf("%d", first_block->info.size); */
 
   return 0;
 }
+
