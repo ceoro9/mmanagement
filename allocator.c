@@ -43,6 +43,11 @@ static inline int get_metadata_size() {
   return sizeof(RC_block_meta_t) * 2;
 }
 
+// set_last_block ...
+void set_last_block(RC_block_t *new_last_block) {
+  RC_last_block = new_last_block;
+}
+
 // is_first_block checks if provided block is first in virtual memory heap
 static inline int is_first_block(RC_block_t *block) {
   return block == heap_start;
@@ -149,8 +154,7 @@ void *allocate_new_block(size_t requested_size) {
   }
 
   set_current_block_metadata(new_block, requested_size, ALLOCATED_BLOCK_FLAG);
-
-  RC_last_block = new_block;
+  set_last_block(new_block);
 
   return new_block->data;
 }
@@ -220,26 +224,34 @@ void *RC_malloc(size_t requested_size) {
 void RC_free(void *data) {
 
   int metadata_size = get_metadata_size();
-
   RC_block_t *source_block = (RC_block_t*) ((char*) data - metadata_size);
-  RC_block_t *next_block   = (RC_block_t*) ((char*) source_block->data + source_block->current_block_info.size);
 
+  // whatever happens next, source block should be free
   source_block->current_block_info.is_free = FREE_BLOCK_FLAG;
 
-  // TODO: coalesce with prev block
+  //
+  // try to coalesce with next block if source
+  // block is not last and next block is free
+  if (!is_last_block(source_block)){
 
-  // if source_block == RC_last_block
-  if (next_block == proc_break) {
-    write(1, "CHECK", 5);
-    return;
+    RC_block_t *next_block = (RC_block_t*) ((char*) source_block->data + source_block->current_block_info.size);
+
+    if (next_block->current_block_info.is_free) {
+      source_block->current_block_info.size += next_block->current_block_info.size + metadata_size;
+    } else {
+      next_block->prev_block_info.is_free = FREE_BLOCK_FLAG;
+    }
   }
 
-  if (next_block->current_block_info.is_free) {
-    // if next block is free - coalesce with the current one
-    source_block->current_block_info.size += next_block->current_block_info.size + metadata_size;
-  } else {
-    // else mark this block as free in the next one prev metadata
-    next_block->prev_block_info.is_free = FREE_BLOCK_FLAG;
+  //
+  // try to coalescce with prev block if source
+  // block is not first and prev block is free
+  if (!is_first_block(source_block) && source_block->prev_block_info.is_free) {
+
+    RC_block_t *prev_block = (RC_block_t*) (((char*) source_block) - (source_block->prev_block_info.size + metadata_size));
+
+    prev_block->current_block_info.size += source_block->current_block_info.size + metadata_size;
+    prev_block->prev_block_info = source_block->prev_block_info;
   }
 
   return;
@@ -292,8 +304,10 @@ int main() {
   void *data_2 = RC_malloc(100);
   void *data_3 = RC_malloc(500);
 
+  RC_free(data_1);
   RC_free(data_3);
-  
+  RC_free(data_2);
+
   printf("\n\n");
   print_allocated_blocks();
 
