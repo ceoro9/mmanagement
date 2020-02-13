@@ -1,7 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-
+#define ALLOCATED_BLOCK_FLAG 0
+#define FREE_BLOCK_FLAG 1
 
 /**
  * @struct meta info about allocated block
@@ -16,7 +17,8 @@ typedef struct {
  * @struct allocated block structure
  */
 typedef struct {
-  RC_block_meta_t info;
+  RC_block_meta_t prev_block_info;
+  RC_block_meta_t current_block_info;
   char data[0];
 } RC_block_t;
 
@@ -27,6 +29,9 @@ static void *heap_start = NULL;
 // proc_break holds pointer to the process break
 static void *proc_break = NULL;
 
+// last_block holds pointer to the last allocated block
+static RC_block_t *RC_last_block = NULL;
+
 // FIRST_ALLOCATION_SIZE holds value of the first allocation in bytes
 static const int FIRST_ALLOCATION_SIZE = 50;
 
@@ -35,7 +40,47 @@ static const int min_block_size = 8;
 
 // get_metadata_size Metadata size selector
 static inline int get_metadata_size() {
-  return sizeof(RC_block_t);
+  return sizeof(RC_block_meta_t) * 2;
+}
+
+// is_first_block checks if provided block is first in virtual memory heap
+static inline int is_first_block(RC_block_t *block) {
+  return block == heap_start;
+}
+
+// is_last_block checks if provided block is last in virtual memory heap
+static inline int is_last_block(RC_block_t *block) {
+  return block == RC_last_block;
+}
+
+/**
+ * @function sets current block metadata
+ */
+void set_current_block_metadata(RC_block_t *block, unsigned int size, unsigned int is_free) {
+
+  if (!block) {
+    return;
+  }
+
+  block->current_block_info.size = size;
+  block->current_block_info.is_free = is_free;
+
+  return;
+}
+
+/**
+ * @function sets prev block metadata
+ */
+void set_prev_block_metadata(RC_block_t *block, unsigned int size, unsigned int is_free) {
+
+  if (!block) {
+    return;
+  }
+
+  block->prev_block_info.size = size;
+  block->prev_block_info.is_free = is_free;
+
+  return;
 }
 
 
@@ -47,7 +92,6 @@ int RC_init() {
   if (!heap_start) {
 
     int alloc_size = FIRST_ALLOCATION_SIZE + get_metadata_size();
-
     heap_start = sbrk(alloc_size);
 
     // unable to allocated memory
@@ -58,9 +102,11 @@ int RC_init() {
     proc_break = sbrk(0);
 
     RC_block_t *new_block = (RC_block_t*) heap_start;
+    RC_last_block = new_block;
 
-    new_block->info.size = FIRST_ALLOCATION_SIZE;
-    new_block->info.is_free = 1;
+    // init first block metadata
+    set_prev_block_metadata(new_block, -1, FREE_BLOCK_FLAG);
+    set_current_block_metadata(new_block, FIRST_ALLOCATION_SIZE, FREE_BLOCK_FLAG);
   }
 
   return 0;
@@ -70,7 +116,7 @@ int RC_init() {
 /**
  * @function calls sbrk to allocate new virtual memory
  */
-void *allocate_new_memory(size_t requested_size) {
+void *allocate_new_block(size_t requested_size) {
 
   int metadata_size = get_metadata_size();
 
@@ -91,8 +137,20 @@ void *allocate_new_memory(size_t requested_size) {
   RC_block_t *new_block = (RC_block_t*) new_proc_break;
   proc_break = (void*) (((char*) new_proc_break) + alloc_size);
 
-  new_block->info.is_free = 0;
-  new_block->info.size = requested_size;
+  // TODO: separate function to handle first block metadata
+  if (!RC_last_block) {
+    set_prev_block_metadata(new_block, -1, FREE_BLOCK_FLAG);
+  } else {
+    set_prev_block_metadata(
+                            new_block,
+                            RC_last_block->current_block_info.size,
+                            RC_last_block->current_block_info.is_free
+                            );
+  }
+
+  set_current_block_metadata(new_block, requested_size, ALLOCATED_BLOCK_FLAG);
+
+  RC_last_block = new_block;
 
   return new_block->data;
 }
@@ -108,41 +166,51 @@ void *RC_malloc(size_t requested_size) {
   }
 
   if (!heap_start) {
-    return allocate_new_memory(requested_size);
+    return allocate_new_block(requested_size);
   }
 
   int metadata_size = get_metadata_size();
-  RC_block_t *current_block = (RC_block_t*) heap_start;
+  RC_block_t *source_block = (RC_block_t*) heap_start;
 
-  while (current_block != proc_break) {
+  // while source block is not last one
+  while (source_block != proc_break) {
 
     // found free block with sufficient size
-    if (current_block->info.is_free &&
-        current_block->info.size >= requested_size) {
+    if (source_block->current_block_info.is_free &&
+        source_block->current_block_info.size >= requested_size) {
 
-      int size_diff = current_block->info.size - requested_size;
+      int size_diff = source_block->current_block_info.size - requested_size;
 
-      current_block->info.is_free = 0;
+      source_block->current_block_info.is_free = ALLOCATED_BLOCK_FLAG;
 
       // split one block on two
       if (size_diff >= min_block_size + metadata_size) {
 
-        RC_block_t *new_block = (RC_block_t*) (current_block->data + requested_size);
+        source_block->current_block_info.size = requested_size;
 
-        new_block->info.is_free = 1;
-        new_block->info.size = size_diff - metadata_size;
+        RC_block_t *new_block = (RC_block_t*) (source_block->data + requested_size);
 
-        current_block->info.size = requested_size;
+        // set new_block metadata
+        set_current_block_metadata(
+                                   new_block,
+                                   size_diff - metadata_size,
+                                   FREE_BLOCK_FLAG
+                                   );
+        set_prev_block_metadata(
+                                new_block,
+                                source_block->current_block_info.size,
+                                source_block->current_block_info.is_free
+                                );
       }
 
-      return (void*) current_block->data;
+      return (void*) source_block->data;
     }
 
-    current_block = (RC_block_t*) (current_block->data + current_block->info.size);
+    source_block = (RC_block_t*) (source_block->data + source_block->current_block_info.size);
   }
 
-  // else if block with sufficient size was not found
-  return allocate_new_memory(requested_size);
+  // else if block with sufficient size was not found -> allocate new one
+  return allocate_new_block(requested_size);
 }
 
 
@@ -153,18 +221,25 @@ void RC_free(void *data) {
 
   int metadata_size = get_metadata_size();
 
-  RC_block_t *current_block = (RC_block_t*) ((char*) data - metadata_size);
-  RC_block_t *next_block    = (RC_block_t*) ((char*) current_block->data + current_block->info.size);
+  RC_block_t *source_block = (RC_block_t*) ((char*) data - metadata_size);
+  RC_block_t *next_block   = (RC_block_t*) ((char*) source_block->data + source_block->current_block_info.size);
 
-  current_block->info.is_free = 1;
+  source_block->current_block_info.is_free = FREE_BLOCK_FLAG;
 
+  // TODO: coalesce with prev block
+
+  // if source_block == RC_last_block
   if (next_block == proc_break) {
+    write(1, "CHECK", 5);
     return;
   }
 
-  // if next block is free - coalesce with the current one
-  if (next_block->info.is_free) {
-    current_block->info.size += next_block->info.size + metadata_size;
+  if (next_block->current_block_info.is_free) {
+    // if next block is free - coalesce with the current one
+    source_block->current_block_info.size += next_block->current_block_info.size + metadata_size;
+  } else {
+    // else mark this block as free in the next one prev metadata
+    next_block->prev_block_info.is_free = FREE_BLOCK_FLAG;
   }
 
   return;
@@ -174,20 +249,20 @@ void RC_free(void *data) {
 void print_allocated_blocks() {
 
   int metadata_size = get_metadata_size();
-  RC_block_t *current_block = (RC_block_t*) heap_start;
+  RC_block_t *source_block = (RC_block_t*) heap_start;
 
   printf("Process break: %p, ", proc_break);
   printf("Allocated blocks: ");
 
-  while (current_block != proc_break) {
+  while (source_block != proc_break) {
     printf(
            "(size=%d, is_free=%d, start=%p, end=%p) ",
-           current_block->info.size,
-           current_block->info.is_free,
-           current_block,
-           ((char*) current_block->data) + current_block->info.size - 1
+           source_block->current_block_info.size,
+           source_block->current_block_info.is_free,
+           source_block,
+           ((char*) source_block->data) + source_block->current_block_info.size - 1
            );
-    current_block = (void*) (current_block->data + current_block->info.size);
+    source_block = (void*) (source_block->data + source_block->current_block_info.size);
   }
 
   printf("\n");
@@ -217,6 +292,8 @@ int main() {
   void *data_2 = RC_malloc(100);
   void *data_3 = RC_malloc(500);
 
+  RC_free(data_3);
+  
   printf("\n\n");
   print_allocated_blocks();
 
