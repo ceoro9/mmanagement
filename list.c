@@ -225,7 +225,7 @@ void reverse_list(list_t *list) {
 }
 
 
-int main() {
+int main1() {
 
   list_t *my_list = init_list();
 

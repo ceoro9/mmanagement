@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <stdbool.h>
+#include "list.h"
 
 
 /**
@@ -18,8 +19,22 @@ typedef struct {
     // Array of thread worker ids
     pthread_t *thread_ids;
 
+    // List of tasks to execute
+    list_t *tasks_list;
+
+    pthread_mutex_t *add_task_mutex;
+
 } thread_pool_t;
 
+/**
+ * @struct thread_pool_task_t
+ */
+typedef struct {
+
+    // Tasks function to execute by worker
+    void (*func_to_execute) (void);
+
+} thread_pool_task_t;
 
 /**
  * @struct thread_pool_worker_input_t
@@ -34,6 +49,22 @@ typedef struct thread_pool_worker_input_ {
 
 } thread_pool_worker_input_t;
 
+
+/**
+ * @function inits thread pool task to execute
+ */
+thread_pool_task_t *init_thread_pool_task(void (*func_to_execute) (void)) {
+
+    thread_pool_task_t *result = (thread_pool_task_t*) malloc(sizeof(thread_pool_task_t));
+
+    if (!result) {
+      return NULL;
+    }
+
+    result->func_to_execute = func_to_execute;
+
+    return result;
+}
 
 /**
  * @function thread_pool_worker
@@ -76,12 +107,29 @@ thread_pool_t *init_thread_pool(unsigned int number_of_threads) {
 
     result_thread_pool->is_opened = true;
     result_thread_pool->number_of_threads = number_of_threads;
-    result_thread_pool->thread_ids = (pthread_t*) malloc(sizeof(pthread_t) * number_of_threads);
 
+    result_thread_pool->thread_ids = (pthread_t*) malloc(sizeof(pthread_t) * number_of_threads);
     if (!result_thread_pool->thread_ids) {
         free(result_thread_pool);
         return NULL;
     }
+
+    result_thread_pool->tasks_list = init_list();
+    if (!result_thread_pool->tasks_list) {
+        free(result_thread_pool->thread_ids);
+        free(result_thread_pool);
+        return NULL;
+    }
+
+    result_thread_pool->add_task_mutex = (pthread_mutex_t*) malloc(sizeof(pthread_mutex_t));
+    if (!result_thread_pool->add_task_mutex) {
+        close_list(result_thread_pool->tasks_list);
+        free(result_thread_pool->thread_ids);
+        free(result_thread_pool);
+        return NULL;
+    }
+
+    pthread_mutex_init(result_thread_pool->add_task_mutex, NULL);
 
     // barrier is onle used on initialization phase
     pthread_barrier_t thread_barrier;
@@ -119,6 +167,7 @@ void destroy_thread_pool(thread_pool_t *tp) {
   if (!tp) {
     return;
   }
+  free(tp->tasks_list);
   free(tp->thread_ids);
   free(tp);
 }
@@ -145,8 +194,20 @@ void close_thread_pool(thread_pool_t *tp) {
 }
 
 
-void add_task_to_thread_pool(thread_pool_t *thread_pool, void(*task_func_ptr)(void*)) {
-    // TODO
+int add_task_to_thread_pool(thread_pool_t *thread_pool, void(*task_func)(void*)) {
+
+    thread_pool_task_t *task = init_thread_pool_task(task_func);
+    list_item_data_t *item_data = init_list_item_data(task, NULL);
+
+    if (!item_data) {
+        return -1;
+    }
+
+    pthread_mutex_lock(thread_pool->add_task_mutex);
+    add_item_to_list(thread_pool->tasks_list, item_data);
+    pthread_mutex_unlock(thread_pool->add_task_mutex);
+
+    return 0;
 }
 
 int main() {
