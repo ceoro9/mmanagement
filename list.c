@@ -1,43 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include "list.h"
 #define LAMBDA(c_) ({ c_ _;})
 #define DO_NOTHING_FUNC LAMBDA(void _(void*_) {})
-
-
-/**
- * @struct List's item data
- *
- * @prop {data_ptr} pointer to actual data
- * @prop {free_func_ptr} pointer to function to free holded memory
- */
-typedef struct list_item_data_t_ {
-  void *data_ptr;
-  void (*free_func_ptr)(void*);
-} list_item_data_t;
-
-
-/**
- * @struct List's item
- *
- * @prop {data} item data
- * @prop {next} pointer to next list's item
- */
-typedef struct list_item_t_ {
-  list_item_data_t *data;
-  struct list_item_t_ *next;
-} list_item_t;
-
-
-/**
- * @struct Linked list
- *
- * @prop {head} list's head(dummy list item)
- * @prop {tail} list's tail(dummy list item)
- */
-typedef struct list_t_ {
-  list_item_t *head;
-  list_item_t *tail;
-} list_t;
 
 
 /**
@@ -49,6 +14,11 @@ list_item_data_t *init_list_item_data(void *data, void(*free_func)(void*)) {
   list_item_data_t *result = (list_item_data_t*) malloc(sizeof(list_item_data_t));
   if (!result) {
     return NULL;
+  }
+
+  // default value
+  if (!free_func) {
+    free_func = DO_NOTHING_FUNC;
   }
 
   result->data_ptr = data;
@@ -138,22 +108,6 @@ list_t* init_list() {
   new_list->tail = tail;
 
   return new_list;
-}
-
-
-static inline list_item_t *get_list_head(list_t *list) {
-  return list->head;
-}
-
-
-static inline list_item_t *get_list_tail(list_t *list) {
-  return list->tail;
-}
-
-
-static inline int is_list_empty(list_t *list) {
-  if (!list->head || !list->tail) return -1;
-  return list->head->next == list->tail;
 }
 
 
