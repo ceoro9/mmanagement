@@ -31,6 +31,7 @@ typedef struct list_item_t_ {
 typedef struct {
   list_item_t *head;
   list_item_t *tail;
+  list_item_t *last_item; // item before tail
 } list_t;
 
 
@@ -51,12 +52,24 @@ static inline list_item_t *get_list_tail(list_t *list) {
 
 
 static inline int is_list_empty(list_t *list) {
-  if (!list->head || !list->tail) return -1;
   return list->head->next == list->tail;
 }
 
 
-list_item_t *add_item_to_list(list_t *list, list_item_data_t *item_data);
+static inline list_item_t *get_item_from_head_of_list(list_t *list) {
+  return is_list_empty(list) ? NULL : list->head->next;
+}
+
+
+static inline list_item_t *get_item_from_tail_of_list(list_t *list) {
+  return is_list_empty(list) ? NULL : list->last_item;
+}
+
+
+list_item_t *add_item_to_head_of_list(list_t *list, list_item_data_t *item_data);
+
+
+list_item_t *add_item_to_tail_of_list(list_t *list, list_item_data_t *item_data);
 
 
 int remove_item_from_list(list_t *list, list_item_t *searched_item);
