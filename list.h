@@ -56,6 +56,11 @@ static inline int is_list_empty(list_t *list) {
 }
 
 
+static inline void *get_list_item_data(list_item_t *list_item) {
+  return list_item ? list_item->data->data_ptr : NULL;
+}
+
+
 static inline list_item_t *get_item_from_head_of_list(list_t *list) {
   return is_list_empty(list) ? NULL : list->head->next;
 }
