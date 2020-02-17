@@ -261,19 +261,22 @@ thread_pool_t *init_thread_pool(unsigned int number_of_threads) {
 
 
 /**
- * @function Frees thread pool's memory
+ * @function Frees all thread pool's resources
  */
 void destroy_thread_pool(thread_pool_t *tp) {
+
   if (!tp) {
     return;
   }
+
   pthread_mutex_destroy(tp->add_task_mutex);
-  pthread_cond_destroy(tp->thread_cond_ptr);
   pthread_mutex_destroy(tp->thread_mutex_ptr);
+  pthread_cond_destroy(tp->thread_cond_ptr);
+  close_list(tp->tasks_list);
+
   free(tp->thread_cond_ptr);
   free(tp->thread_mutex_ptr);
   free(tp->add_task_mutex);
-  free(tp->tasks_list);
   free(tp->thread_ids);
   free(tp);
 }
@@ -325,15 +328,28 @@ int add_task_to_thread_pool(thread_pool_t *thread_pool, void(*task_func)(void*))
     return 0;
 }
 
-void test_task_func(void *input) {
+
+void test_task_func_1(void *input) {
     printf("Hello world from #%d thread\n", pthread_self());
     fflush(stdout);
 }
 
+
+void test_task_func_2(void *input) {
+  printf("Bye world from #%d thread\n", pthread_self());
+  fflush(stdout);
+}
+
+
 int main() {
 
     thread_pool_t *tp = init_thread_pool(10);
-    add_task_to_thread_pool(tp, &test_task_func);
+
+    add_task_to_thread_pool(tp, &test_task_func_1);
+    add_task_to_thread_pool(tp, &test_task_func_1);
+    add_task_to_thread_pool(tp, &test_task_func_2);
+    add_task_to_thread_pool(tp, &test_task_func_2);
+
     sleep(3);  // sleep for 3 seconds
     close_thread_pool(tp);
 
