@@ -147,9 +147,9 @@ void *thread_pool_worker(void *data) {
         // remove task from list and free its memory
         remove_item_from_list(tasks_list, list_item);
 
-        (task_func)(NULL); // TODO: pass user input
-
         pthread_mutex_unlock(tasks_mutex);
+
+        (task_func)(NULL); // TODO: pass user input
     }
 
     printf("#%d thread is finished\n", pthread_self());
