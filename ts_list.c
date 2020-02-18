@@ -1,6 +1,18 @@
 #include <stdlib.h>
+#include <stdio.h>
 #include <pthread.h>
+#include <time.h>
+#include <unistd.h>
 #include "list.h"
+
+
+char *itoa(int num, char *str) {
+  if(!str) {
+    return NULL;
+  }
+  sprintf(str, "%d", num);
+  return str;
+}
 
 
 typedef struct {
@@ -22,7 +34,12 @@ ts_list_t *init_ts_list() {
     return NULL;
   }
 
-  ts_list_t *ts_list = (ts_list_t*) malloc(sizeof(ts_list));
+  ts_list_t *ts_list = (ts_list_t*) malloc(sizeof(ts_list_t));
+
+  if (!ts_list) {
+    close_list(list);
+    return NULL;
+  }
 
   pthread_mutex_init(&ts_list->add_head_mutex, NULL);
   pthread_mutex_init(&ts_list->add_tail_mutex, NULL);
@@ -31,6 +48,39 @@ ts_list_t *init_ts_list() {
   ts_list->origin_list = list;
 
   return ts_list;
+}
+
+
+void lock_all_mutexes(ts_list_t *list) {
+  pthread_mutex_lock(&list->add_head_mutex);
+  pthread_mutex_lock(&list->add_tail_mutex);
+  pthread_mutex_lock(&list->remove_mutex);
+}
+
+
+void unlock_all_mutexes(ts_list_t *list) {
+  pthread_mutex_unlock(&list->add_head_mutex);
+  pthread_mutex_unlock(&list->add_tail_mutex);
+  pthread_mutex_unlock(&list->remove_mutex);
+}
+
+
+void destroy_all_mutexes(ts_list_t *list) {
+  pthread_mutex_destroy(&list->add_head_mutex);
+  pthread_mutex_destroy(&list->add_tail_mutex);
+  pthread_mutex_destroy(&list->remove_mutex);
+}
+
+
+void TS_close_list(ts_list_t *list) {
+
+  lock_all_mutexes(list);
+  close_list(list->origin_list);
+  unlock_all_mutexes(list);
+
+  destroy_all_mutexes(list);
+
+  free(list);
 }
 
 
@@ -117,7 +167,83 @@ int TS_remove_item_from_list(ts_list_t *list, list_item_t *searched_item) {
 }
 
 
-int main() {
+typedef struct {
+  ts_list_t *list;
+  int start_counter;
+  int end_counter;
+  int add_to_head;
+} worker_input_t;
+
+
+void *test_add_worker(void *_input) {
+
+  worker_input_t *input = (worker_input_t*) _input;
+
+  for (int i = input->start_counter; i < input->end_counter; ++i) {
+
+    char *data = malloc(20);
+    list_item_data_t *item_data = init_list_item_data(itoa(i, data), free);
+
+    if (input->add_to_head) {
+      TS_add_item_to_head_of_list(input->list, item_data);
+    } else {
+      TS_add_item_to_tail_of_list(input->list, item_data);
+    }
+  }
+
+  free(_input);
+
+  return NULL;
+}
+
+int test_add_operations() {
+
+  ts_list_t *list = init_ts_list();
+
+  const int NUMBER_OF_THREADS = 100;
+  const int EACH_THREAD_CHUNK = 10;
+
+  pthread_t *thread_ids = (pthread_t*) malloc(sizeof(pthread_t) * NUMBER_OF_THREADS);
+
+  for (int i = 0; i < NUMBER_OF_THREADS; ++i) {
+
+    worker_input_t *input = (worker_input_t*) malloc(sizeof(worker_input_t));
+    input->list = list;
+    input->start_counter = i * EACH_THREAD_CHUNK;
+    input->end_counter   = input->start_counter + EACH_THREAD_CHUNK;
+    input->add_to_head   = rand() % 2;
+
+    pthread_create(thread_ids + i, NULL, test_add_worker, (void*) input);
+  }
+
+
+  for (int i = 0; i < NUMBER_OF_THREADS; ++i) {
+    pthread_join(*(thread_ids + i), NULL);
+  }
+
+  free(thread_ids);
+
+  // Counter
+  int counter = 0;
+  list_item_t *current_item = list->origin_list->head->next;
+
+  while (current_item != list->origin_list->tail) {
+    ++counter;
+    current_item = current_item->next;
+  }
+
+  TS_close_list(list);
+
+  if (counter != EACH_THREAD_CHUNK * NUMBER_OF_THREADS) {
+    printf("Error. Counter = %d\n", counter);
+    return -1;
+  }
+
+  printf("Success\n");
 
   return 0;
+}
+
+int main() {
+  return test_add_operations();
 }
