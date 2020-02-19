@@ -167,6 +167,14 @@ int TS_remove_item_from_list(ts_list_t *list, list_item_t *searched_item) {
 }
 
 
+// ------------------------------------------------------
+// ------------------------ Tests -----------------------
+// ------------------------------------------------------
+
+
+const int NUMBER_OF_THREADS = 100;
+const int EACH_THREAD_CHUNK = 10;
+
 typedef struct {
   ts_list_t *list;
   int start_counter;
@@ -196,12 +204,39 @@ void *test_add_worker(void *_input) {
   return NULL;
 }
 
-int test_add_operations() {
+
+void *test_add_and_remove_worker(void *_input) {
+
+  list_item_t *current_item;
+  worker_input_t *input = (worker_input_t*) _input;
+
+  for (int i = input->start_counter; i < input->end_counter; ++i) {
+
+    char *data = malloc(20);
+    list_item_data_t *item_data = init_list_item_data(itoa(i, data), free);
+
+    if (input->add_to_head) {
+      current_item = TS_add_item_to_head_of_list(input->list, item_data);
+    } else {
+      current_item = TS_add_item_to_tail_of_list(input->list, item_data);
+    }
+
+    double time_to_sleep = (rand() % 100) * 0.001; // 0 - 0.099
+    sleep(time_to_sleep);
+
+    TS_remove_item_from_list(input->list, current_item);
+  }
+
+  free(_input);
+
+  return NULL;
+}
+
+
+ts_list_t *spawn_and_join_workers(void *(*worker_func)(void*)) {
 
   ts_list_t *list = init_ts_list();
 
-  const int NUMBER_OF_THREADS = 100;
-  const int EACH_THREAD_CHUNK = 10;
 
   pthread_t *thread_ids = (pthread_t*) malloc(sizeof(pthread_t) * NUMBER_OF_THREADS);
 
@@ -213,7 +248,7 @@ int test_add_operations() {
     input->end_counter   = input->start_counter + EACH_THREAD_CHUNK;
     input->add_to_head   = rand() % 2;
 
-    pthread_create(thread_ids + i, NULL, test_add_worker, (void*) input);
+    pthread_create(thread_ids + i, NULL, worker_func, (void*) input);
   }
 
 
@@ -223,7 +258,14 @@ int test_add_operations() {
 
   free(thread_ids);
 
-  // Counter
+  return list;
+}
+
+
+int test_add_head_tail() {
+
+  ts_list_t *list = spawn_and_join_workers(test_add_worker);
+
   int counter = 0;
   list_item_t *current_item = list->origin_list->head->next;
 
@@ -235,15 +277,30 @@ int test_add_operations() {
   TS_close_list(list);
 
   if (counter != EACH_THREAD_CHUNK * NUMBER_OF_THREADS) {
-    printf("Error. Counter = %d\n", counter);
-    return -1;
+    printf("test_add_head_tail: Error. Counter = %d\n", counter);
+    return 1;
   }
 
-  printf("Success\n");
+  printf("test_add_head_tail: Success\n");
 
   return 0;
 }
 
+int test_add_and_remove_operations() {
+  ts_list_t *list = spawn_and_join_workers(test_add_and_remove_worker);
+
+  if (is_list_empty(list->origin_list)) {
+    printf("test_add_and_remove: Success\n");
+    return 0;
+  } else {
+    printf("test_add_and_remove: Failure\n");
+    return 1;
+  }
+}
+
+
 int main() {
-  return test_add_operations();
+  const int test_result_1 = test_add_head_tail();
+  const int test_result_2 = test_add_and_remove_operations();
+  return test_result_1 && test_result_2;
 }
