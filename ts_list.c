@@ -4,6 +4,7 @@
 #include <time.h>
 #include <unistd.h>
 #include "list.h"
+#define LAMBDA(c_) ({ c_ _;})
 
 
 char *itoa(int num, char *str) {
@@ -125,25 +126,48 @@ list_item_t *TS_add_item_to_tail_of_list(ts_list_t *list, list_item_data_t *item
 }
 
 
+static inline int c_is_first_item(ts_list_t *list, list_item_t *item) {
+  return list->origin_list->head->next == item;
+}
+
+static inline int c_is_last_item(ts_list_t *list, list_item_t *item) {
+  return list->origin_list->last_item == item;
+}
+
+
 int TS_remove_item_from_list(ts_list_t *list, list_item_t *searched_item) {
 
   int result;
 
+  //
+  // Handlers
+  //
+  int (*handle_when_first_item) (ts_list_t*, list_item_t*) = LAMBDA(int _(ts_list_t *list, list_item_t *item) {
+    int result = remove_item_from_list(list->origin_list, searched_item);
+    pthread_mutex_unlock(&list->add_head_mutex);
+    return result;
+  });
+
+  int (*handle_when_last_item) (ts_list_t*, list_item_t*) = LAMBDA(int _(ts_list_t *list, list_item_t *item) {
+    int result = remove_item_from_list(list->origin_list, searched_item);
+    pthread_mutex_unlock(&list->add_tail_mutex);
+    return result;
+  });
+
   pthread_mutex_lock(&list->remove_mutex);
 
-  int is_first_item = list->origin_list->head->next == searched_item;
-  int is_last_item  = searched_item->next == list->origin_list->tail;
+  int is_first_item = c_is_first_item(list, searched_item);
+  int is_last_item  = c_is_last_item(list, searched_item);
 
   if (is_first_item && is_last_item) {
 
     pthread_mutex_lock(&list->add_head_mutex);
     pthread_mutex_lock(&list->add_tail_mutex);
 
-    //
-    // Test one more time to determine more efficient way to unlock add mutexes
-    //
-    int new_is_first_item = list->origin_list->head->next == searched_item;
-    int new_is_last_item  = searched_item->next == list->origin_list->tail;
+    // Test if this condition is still true
+    // to determine more efficient way to unlock add mutexes
+    int new_is_first_item = c_is_first_item(list, searched_item);
+    int new_is_last_item  = c_is_last_item(list, searched_item);
 
     if (new_is_first_item && new_is_last_item) {
 
@@ -151,22 +175,18 @@ int TS_remove_item_from_list(ts_list_t *list, list_item_t *searched_item) {
       pthread_mutex_unlock(&list->add_tail_mutex);
       pthread_mutex_unlock(&list->add_head_mutex);
 
-    } else if (is_first_item) {
+    } else if (new_is_first_item) {
 
       pthread_mutex_unlock(&list->add_tail_mutex);
-      result = remove_item_from_list(list->origin_list, searched_item);
-      pthread_mutex_unlock(&list->add_head_mutex);
+      result = handle_when_first_item(list, searched_item);
 
-    } else if (is_last_item) {
+    } else if (new_is_last_item) {
 
       pthread_mutex_unlock(&list->add_head_mutex);
-      result = remove_item_from_list(list->origin_list, searched_item);
-      pthread_mutex_unlock(&list->add_tail_mutex);
+      result = handle_when_last_item(list, searched_item);
 
     } else {
 
-      pthread_mutex_unlock(&list->add_tail_mutex);
-      pthread_mutex_unlock(&list->add_head_mutex);
       result = remove_item_from_list(list->origin_list, searched_item);
 
     }
@@ -174,11 +194,12 @@ int TS_remove_item_from_list(ts_list_t *list, list_item_t *searched_item) {
 
     pthread_mutex_lock(&list->add_head_mutex);
 
-    int new_is_first_item = list->origin_list->head->next == searched_item;
+    // Test if this condition is still true
+    // to determine more efficient way to unlock add mutexes
+    int new_is_first_item = c_is_first_item(list, searched_item);
 
     if (new_is_first_item) {
-      result = remove_item_from_list(list->origin_list, searched_item);
-      pthread_mutex_unlock(&list->add_head_mutex);
+      result = handle_when_first_item(list, searched_item);
     } else {
       pthread_mutex_unlock(&list->add_head_mutex);
       result = remove_item_from_list(list->origin_list, searched_item);
@@ -187,11 +208,12 @@ int TS_remove_item_from_list(ts_list_t *list, list_item_t *searched_item) {
 
     pthread_mutex_lock(&list->add_tail_mutex);
 
-    int new_is_last_item = searched_item->next == list->origin_list->tail;
+    // Test if this condition is still true
+    // to determine more efficient way to unlock add mutexes
+    int new_is_last_item  = c_is_last_item(list, searched_item);
 
     if (new_is_last_item) {
-      result = remove_item_from_list(list->origin_list, searched_item);
-      pthread_mutex_unlock(&list->add_tail_mutex);
+      result = handle_when_last_item(list, searched_item);
     } else {
       pthread_mutex_unlock(&list->add_tail_mutex);
       result = remove_item_from_list(list->origin_list, searched_item);
@@ -343,3 +365,4 @@ int main() {
   const int test_result_2 = test_add_and_remove_operations();
   return test_result_1 && test_result_2;
 }
+
