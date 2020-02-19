@@ -138,25 +138,64 @@ int TS_remove_item_from_list(ts_list_t *list, list_item_t *searched_item) {
 
     pthread_mutex_lock(&list->add_head_mutex);
     pthread_mutex_lock(&list->add_tail_mutex);
-    // TODO: check one more time
-    result = remove_item_from_list(list->origin_list, searched_item);
-    pthread_mutex_unlock(&list->add_tail_mutex);
-    pthread_mutex_unlock(&list->add_head_mutex);
 
+    //
+    // Test one more time to determine more efficient way to unlock add mutexes
+    //
+    int new_is_first_item = list->origin_list->head->next == searched_item;
+    int new_is_last_item  = searched_item->next == list->origin_list->tail;
+
+    if (new_is_first_item && new_is_last_item) {
+
+      result = remove_item_from_list(list->origin_list, searched_item);
+      pthread_mutex_unlock(&list->add_tail_mutex);
+      pthread_mutex_unlock(&list->add_head_mutex);
+
+    } else if (is_first_item) {
+
+      pthread_mutex_unlock(&list->add_tail_mutex);
+      result = remove_item_from_list(list->origin_list, searched_item);
+      pthread_mutex_unlock(&list->add_head_mutex);
+
+    } else if (is_last_item) {
+
+      pthread_mutex_unlock(&list->add_head_mutex);
+      result = remove_item_from_list(list->origin_list, searched_item);
+      pthread_mutex_unlock(&list->add_tail_mutex);
+
+    } else {
+
+      pthread_mutex_unlock(&list->add_tail_mutex);
+      pthread_mutex_unlock(&list->add_head_mutex);
+      result = remove_item_from_list(list->origin_list, searched_item);
+
+    }
   } else if (is_first_item) {
 
     pthread_mutex_lock(&list->add_head_mutex);
-    // TODO: check one more time
-    result = remove_item_from_list(list->origin_list, searched_item);
-    pthread_mutex_unlock(&list->add_head_mutex);
 
+    int new_is_first_item = list->origin_list->head->next == searched_item;
+
+    if (new_is_first_item) {
+      result = remove_item_from_list(list->origin_list, searched_item);
+      pthread_mutex_unlock(&list->add_head_mutex);
+    } else {
+      pthread_mutex_unlock(&list->add_head_mutex);
+      result = remove_item_from_list(list->origin_list, searched_item);
+    }
   } else if (is_last_item) {
 
     pthread_mutex_lock(&list->add_tail_mutex);
-    // TODO: check one more time
-    result = remove_item_from_list(list->origin_list, searched_item);
-    pthread_mutex_unlock(&list->add_tail_mutex);
 
+    int new_is_last_item = searched_item->next == list->origin_list->tail;
+
+    if (new_is_last_item) {
+      result = remove_item_from_list(list->origin_list, searched_item);
+      pthread_mutex_unlock(&list->add_tail_mutex);
+    } else {
+      pthread_mutex_unlock(&list->add_tail_mutex);
+      result = remove_item_from_list(list->origin_list, searched_item);
+    }
   } else {
     result = remove_item_from_list(list->origin_list, searched_item);
   }
