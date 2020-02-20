@@ -228,6 +228,61 @@ int TS_remove_item_from_list(ts_list_t *list, list_item_t *searched_item) {
 }
 
 
+/**
+ * @function checks if list has one item
+ * @alert    should be called with locked remove mutex
+ * @returns  true or false
+ */
+static inline int is_one_item_list(ts_list_t *list) {
+  list_t *origin_list = list->origin_list;
+  return !is_list_empty(origin_list) && origin_list->head->next->next == origin_list->tail;
+}
+
+
+void *TS_remove_and_get_item_from_head(ts_list_t *list) {
+
+  void *result;
+
+  pthread_mutex_lock(&list->remove_mutex);
+  pthread_mutex_lock(&list->add_head_mutex);
+
+  if (is_one_item_list(list)) {
+    pthread_mutex_lock(&list->add_tail_mutex);
+    result = remove_and_get_item_data_from_head(list->origin_list);
+    pthread_mutex_unlock(&list->add_tail_mutex);
+  } else {
+    result = remove_and_get_item_data_from_head(list->origin_list);
+  }
+
+  pthread_mutex_unlock(&list->add_head_mutex);
+  pthread_mutex_unlock(&list->remove_mutex);
+
+  return result;
+}
+
+
+list_item_t *TS_remove_and_get_item_from_tail(ts_list_t *list) {
+
+  void *result;
+
+  pthread_mutex_lock(&list->remove_mutex);
+  pthread_mutex_lock(&list->add_tail_mutex);
+
+  if (is_one_item_list(list)) {
+    pthread_mutex_lock(&list->add_head_mutex);
+    result = remove_and_get_item_data_from_head(list->origin_list);
+    pthread_mutex_unlock(&list->add_head_mutex);
+  } else {
+    result = remove_and_get_item_data_from_head(list->origin_list);
+  }
+
+  pthread_mutex_unlock(&list->add_tail_mutex);
+  pthread_mutex_unlock(&list->remove_mutex);
+
+  return result;
+}
+
+
 // ------------------------------------------------------
 // ------------------------ Tests -----------------------
 // ------------------------------------------------------

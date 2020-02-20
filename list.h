@@ -80,6 +80,12 @@ list_item_t *add_item_to_tail_of_list(list_t *list, list_item_data_t *item_data)
 int remove_item_from_list(list_t *list, list_item_t *searched_item);
 
 
+void *remove_and_get_item_data_from_head(list_t *list);
+
+
+void *remove_and_get_item_data_from_tail(list_t *list);
+
+
 int clean_list(list_t *list);
 
 

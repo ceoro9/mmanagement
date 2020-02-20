@@ -194,6 +194,54 @@ int remove_item_from_list(list_t *list, list_item_t *searched_item) {
 
 
 /**
+ * @function removes first item from list
+ * @returns pointer to item's data
+ */
+void *remove_and_get_item_data_from_head(list_t *list){
+
+  if (is_list_empty(list)) {
+    return NULL;
+  }
+
+  list_item_t *first_item = list->head->next;
+  void *first_item_data = first_item->data->data_ptr;
+
+  list->head->next = first_item->next;
+  free_list_item(first_item);
+
+  return first_item_data;
+}
+
+
+/**
+ * @function removes last item from list
+ * @returns pointer to item's data
+ */
+void *remove_and_get_item_data_from_tail(list_t *list) {
+
+  if (is_list_empty(list)) {
+    return NULL;
+  }
+
+  list_item_t *last_item = list->last_item;
+  void *item_data = last_item->data->data_ptr;
+
+  // TODO: get rid of linear complexity
+  //       to find find prev to last item
+  list_item_t *current_item = list->head;
+  while (current_item->next != last_item) {
+    current_item = current_item->next;
+  }
+
+  current_item->next = last_item->next;
+  list->last_item = current_item == list->head ? NULL : current_item;
+  free_list_item(last_item);
+
+  return item_data;
+}
+
+
+/**
  * @function Cleans list
  * @returns number of deleted list items
  */
@@ -266,58 +314,58 @@ void reverse_list(list_t *list) {
 }
 
 
-int main() {
+/* int main() { */
 
-  list_t *my_list = init_list();
+/*   list_t *my_list = init_list(); */
 
-  // init data in text memory of program, so this memory
-  // cann't be freed - we do nothing in clean up callback
-  list_item_data_t *lid_1, *lid_2, *lid_3, *lid_0;
-  lid_1 = init_list_item_data((void*) 1, DO_NOTHING_FUNC);
-  lid_2 = init_list_item_data((void*) 2, DO_NOTHING_FUNC);
-  lid_3 = init_list_item_data((void*) 3, DO_NOTHING_FUNC);
-  lid_0 = init_list_item_data((void*) 0, DO_NOTHING_FUNC);
+/*   // init data in text memory of program, so this memory */
+/*   // cann't be freed - we do nothing in clean up callback */
+/*   list_item_data_t *lid_1, *lid_2, *lid_3, *lid_0; */
+/*   lid_1 = init_list_item_data((void*) 1, DO_NOTHING_FUNC); */
+/*   lid_2 = init_list_item_data((void*) 2, DO_NOTHING_FUNC); */
+/*   lid_3 = init_list_item_data((void*) 3, DO_NOTHING_FUNC); */
+/*   lid_0 = init_list_item_data((void*) 0, DO_NOTHING_FUNC); */
 
-  // init data on heap, so in clean up callback
-  // we just pass pointer to free function from stdlib
-  int *hoh = (int*) malloc(sizeof(int));
-  *hoh = 4;
-  list_item_data_t *lid_4 = init_list_item_data((void*) hoh, &free);
+/*   // init data on heap, so in clean up callback */
+/*   // we just pass pointer to free function from stdlib */
+/*   int *hoh = (int*) malloc(sizeof(int)); */
+/*   *hoh = 4; */
+/*   list_item_data_t *lid_4 = init_list_item_data((void*) hoh, &free); */
 
-  free_list_item_data(lid_4);
+/*   free_list_item_data(lid_4); */
 
-  list_item_t *item_1 = add_item_to_head_of_list(my_list, lid_1);
-  list_item_t *item_2 = add_item_to_head_of_list(my_list, lid_2);
-  list_item_t *item_3 = add_item_to_head_of_list(my_list, lid_3);
-  list_item_t *item_0 = add_item_to_tail_of_list(my_list, lid_0);
+/*   list_item_t *item_1 = add_item_to_head_of_list(my_list, lid_1); */
+/*   list_item_t *item_2 = add_item_to_head_of_list(my_list, lid_2); */
+/*   list_item_t *item_3 = add_item_to_head_of_list(my_list, lid_3); */
+/*   list_item_t *item_0 = add_item_to_tail_of_list(my_list, lid_0); */
 
-  printf("first element: %d\n", my_list->head->next->data->data_ptr);
-  printf("second element: %d\n", my_list->head->next->next->data->data_ptr);
-  printf("third element: %d\n", my_list->head->next->next->next->data->data_ptr);
-  printf("fourth element: %d\n", my_list->head->next->next->next->next->data->data_ptr);
+/*   printf("first element: %d\n", my_list->head->next->data->data_ptr); */
+/*   printf("second element: %d\n", my_list->head->next->next->data->data_ptr); */
+/*   printf("third element: %d\n", my_list->head->next->next->next->data->data_ptr); */
+/*   printf("fourth element: %d\n", my_list->head->next->next->next->next->data->data_ptr); */
 
-  reverse_list(my_list);
+/*   reverse_list(my_list); */
 
-  printf("\n===================\n\n");
+/*   printf("\n===================\n\n"); */
 
-  printf("first element: %d\n", my_list->head->next->data->data_ptr);
-  printf("second element: %d\n", my_list->head->next->next->data->data_ptr);
-  printf("third element: %d\n\n", my_list->head->next->next->next->data->data_ptr);
+/*   printf("first element: %d\n", my_list->head->next->data->data_ptr); */
+/*   printf("second element: %d\n", my_list->head->next->next->data->data_ptr); */
+/*   printf("third element: %d\n\n", my_list->head->next->next->next->data->data_ptr); */
 
-  //
-  //
-  //
+/*   // */
+/*   // */
+/*   // */
 
-  printf(is_list_empty(my_list) ? "list is empty\n" : "list is not empty\n");
+/*   printf(is_list_empty(my_list) ? "list is empty\n" : "list is not empty\n"); */
 
-  remove_item_from_list(my_list, item_1);
-  remove_item_from_list(my_list, item_2);
-  remove_item_from_list(my_list, item_3);
+/*   remove_item_from_list(my_list, item_1); */
+/*   remove_item_from_list(my_list, item_2); */
+/*   remove_item_from_list(my_list, item_3); */
 
-  printf(is_list_empty(my_list) ? "list is empty\n" : "list is not empty\n");
+/*   printf(is_list_empty(my_list) ? "list is empty\n" : "list is not empty\n"); */
 
-  close_list(my_list);
+/*   close_list(my_list); */
 
-  return 0;
-}
+/*   return 0; */
+/* } */
 
