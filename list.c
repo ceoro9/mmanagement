@@ -1,9 +1,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "list.h"
+
+#ifndef TS_LAMBDA_
+#define TS_LAMBDA_
 #define LAMBDA(c_) ({ c_ _;})
 #define DO_NOTHING_FUNC LAMBDA(void _(void*_) {})
-
+#endif
 
 /**
  * @function Initializes list's item data

@@ -3,7 +3,17 @@
 #include <pthread.h>
 #include <time.h>
 #include <unistd.h>
+
+#ifndef ST_LIST_
+#define ST_LIST_
 #include "list.h"
+#endif
+
+#ifndef ST_TS_LIST_
+#define ST_TS_LIST_
+#include "ts_list.h"
+#endif
+
 #define LAMBDA(c_) ({ c_ _;})
 
 
@@ -14,17 +24,6 @@ char *itoa(int num, char *str) {
   sprintf(str, "%d", num);
   return str;
 }
-
-
-typedef struct {
-
-  pthread_mutex_t add_head_mutex;
-  pthread_mutex_t add_tail_mutex;
-  pthread_mutex_t remove_mutex;
-
-  list_t *origin_list;
-
-} ts_list_t;
 
 
 ts_list_t *init_ts_list() {
@@ -415,9 +414,9 @@ int test_add_and_remove_operations() {
 }
 
 
-int main() {
-  const int test_result_1 = test_add_head_tail();
-  const int test_result_2 = test_add_and_remove_operations();
-  return test_result_1 && test_result_2;
-}
+/* int main() { */
+/*   const int test_result_1 = test_add_head_tail(); */
+/*   const int test_result_2 = test_add_and_remove_operations(); */
+/*   return test_result_1 && test_result_2; */
+/* } */
 
